@@ -16,7 +16,10 @@ jobs:
     docker:
       - image: cimg/base:2022.08
     steps:
-      - run: "Echo: << parameters.message >>"
+      - run:
+          name: Echoing
+          command: |
+            echo "<< parameters.message >>"
 
   Publish latest drafted release:
     docker:
