@@ -2,7 +2,7 @@ version: 2.1
 
 parameters:
 
-  schedule:
+  release:
     type: boolean
     default: false
 
@@ -18,15 +18,47 @@ jobs:
     steps:
       - run: "Echo: << parameters.message >>"
 
+  Publish latest drafted release:
+    docker:
+      - image: cimg/base:2022.08
+    parameters:
+      publish:
+        type: boolean
+        default: false
+    steps:
+      - run:
+          name: Get drafted release
+          command: |
+            DRAFTED_RELEASE=$(curl -X GET \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+              "https://api.github.com/repos/emigm/circleci-playground/releases" \
+              | jq -c -M '.[0] | if .draft==true then {"id": .id, "tag": .tag_name, "url": .url} else "" end')
+            DRAFTED_RELEASE_ID=$(echo $DRAFTED_RELEASE | jq .id)
+            echo "Drafted release ID: ${DRAFTED_RELEASE_ID}"
+            echo "export DRAFTED_RELEASE_ID='$DRAFTED_RELEASE_ID'" >> $BASH_ENV
+      - when:
+          condition: << parameters.publish >>
+          steps:
+            - run:
+                name: Publish drafted release
+                command: |
+                  if [ -z "$DRAFTED_RELEASE_ID" ]; then
+                    echo "No drafted release to publish"
+                  else
+                    curl -X PATCH \
+                      -H "Accept: application/vnd.github+json" \
+                      -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+                      "https://api.github.com/repos/emigm/circleci-playground/releases/${DRAFTED_RELEASE_ID}" \
+                      -d '{"draft": false}'
+                  fi
+
 workflows:
 
   Regular workflow:
-    when:
-      not:
-        equal: [ scheduled_pipeline, << pipeline.trigger_source >> ]
     jobs:
       - Echo message:
-          message: Regular workflow
+          message: Triggered by << pipeline.trigger_source >>
           filters:
             branches:
               ignore: /.*/
@@ -38,9 +70,12 @@ workflows:
       equal: [ scheduled_pipeline, << pipeline.trigger_source >> ]
     jobs:
       - Echo message:
-          message: "Scheduled workflow"
           filters:
             branches:
-              ignore: /.*/
-            tags:
-              only: /v([0-9]+){1}(\.[0-9]+){2}(\-.+)?/
+              only: main
+          message: Triggered by << pipeline.trigger_source >>:<< pipeline.schedule.name >>
+      - Publish latest drafted release:
+          filters:
+            branches:
+              only: main
+          publish: << pipeline.parameters.release >>
