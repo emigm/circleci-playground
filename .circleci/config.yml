@@ -73,12 +73,21 @@ workflows:
       equal: [ scheduled_pipeline, << pipeline.trigger_source >> ]
     jobs:
       - Echo message:
+          message: Triggered by << pipeline.trigger_source >>:<< pipeline.schedule.name >>
           filters:
             branches:
               only: main
-          message: Triggered by << pipeline.trigger_source >>:<< pipeline.schedule.name >>
       - Publish latest drafted release:
           filters:
             branches:
               only: main
           publish: << pipeline.parameters.release >>
+
+  Manual workflow:
+    when: << pipeline.parameters.release >>
+    jobs:
+      - Echo message:
+          message: Triggered by << pipeline.trigger_source >>
+          filters:
+            branches:
+              only: main
